@@ -11,13 +11,9 @@ import (
 	"github.com/isaacphi/mcp-language-server/internal/tools"
 )
 
-// TestReadDefinition tests the ReadDefinition tool with various Go type definitions
+// TestReadDefinition tests the ReadDefinition tool with various Go type definitions.
+// Runs in both subprocess and headless (listen-mode) modes.
 func TestReadDefinition(t *testing.T) {
-	suite := internal.GetTestSuite(t)
-
-	ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
-	defer cancel()
-
 	tests := []struct {
 		name         string
 		symbolName   string
@@ -80,18 +76,34 @@ func TestReadDefinition(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Call the ReadDefinition tool
-			result, err := tools.ReadDefinition(ctx, suite.Client, tc.symbolName)
-			if err != nil {
-				t.Fatalf("Failed to read definition: %v", err)
+	for _, mode := range []struct {
+		name     string
+		headless bool
+	}{{"Subprocess", false}, {"Headless", true}} {
+		mode := mode
+		t.Run(mode.name, func(t *testing.T) {
+			suite := internal.GetTestSuiteForMode(t, mode.headless)
+			ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
+			defer cancel()
+
+			snapshotCategory := "definition"
+			if mode.headless {
+				snapshotCategory = "definition_headless"
 			}
 
+			for _, tc := range tests {
+				tc := tc
+				t.Run(tc.name, func(t *testing.T) {
+			// Call the ReadDefinition tool
+					result, err := tools.ReadDefinition(ctx, suite.Client, tc.symbolName)
+					if err != nil {
+						t.Fatalf("Failed to read definition: %v", err)
+					}
+
 			// Check that the result contains relevant information
-			if !strings.Contains(result, tc.expectedText) {
-				t.Errorf("Definition does not contain expected text: %s", tc.expectedText)
-			}
+					if !strings.Contains(result, tc.expectedText) {
+						t.Errorf("Definition does not contain expected text: %s", tc.expectedText)
+					}
 
 			// Use snapshot testing to verify exact output
 			common.SnapshotTest(t, "go", "definition", tc.snapshotName, result)

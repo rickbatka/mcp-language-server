@@ -12,90 +12,101 @@ import (
 	"github.com/isaacphi/mcp-language-server/internal/tools"
 )
 
-// TestCodeLens tests the codelens functionality with the Go language server
+// TestCodeLens tests the codelens functionality with the Go language server.
+// Runs in both subprocess and headless (listen-mode) modes.
 func TestCodeLens(t *testing.T) {
 	t.Skip("Remove this line to run codelens tool tests")
 
-	// Test GetCodeLens with a file that should have codelenses
-	t.Run("GetCodeLens", func(t *testing.T) {
-		suite := internal.GetTestSuite(t)
-
-		ctx, cancel := context.WithTimeout(suite.Context, 5*time.Second)
-		defer cancel()
-
-		// The go.mod fixture already has an unused dependency
-
-		// Wait for LSP to process the file
-		time.Sleep(2 * time.Second)
-
-		// Test GetCodeLens
-		filePath := filepath.Join(suite.WorkspaceDir, "go.mod")
-		result, err := tools.GetCodeLens(ctx, suite.Client, filePath)
-		if err != nil {
-			t.Fatalf("GetCodeLens failed: %v", err)
+	for _, mode := range []struct {
+		name     string
+		headless bool
+	}{{"Subprocess", false}, {"Headless", true}} {
+		mode := mode
+		snapshotCategory := "codelens"
+		if mode.headless {
+			snapshotCategory = "codelens_headless"
 		}
+		t.Run(mode.name, func(t *testing.T) {
+			t.Run("GetCodeLens", func(t *testing.T) {
+				suite := internal.GetTestSuiteForMode(t, mode.headless)
 
-		// Verify we have at least one code lens
-		if !strings.Contains(result, "Code Lens results") {
-			t.Errorf("Expected code lens results but got: %s", result)
-		}
+				ctx, cancel := context.WithTimeout(suite.Context, 5*time.Second)
+				defer cancel()
 
-		// Verify we have a "go mod tidy" code lens
-		if !strings.Contains(strings.ToLower(result), "tidy") {
-			t.Errorf("Expected 'tidy' code lens but got: %s", result)
-		}
+				// The go.mod fixture already has an unused dependency
 
-		common.SnapshotTest(t, "go", "codelens", "get", result)
-	})
+				// Wait for LSP to process the file
+				time.Sleep(2 * time.Second)
 
-	// Test ExecuteCodeLens by running the tidy codelens command
-	t.Run("ExecuteCodeLens", func(t *testing.T) {
-		suite := internal.GetTestSuite(t)
+				// Test GetCodeLens
+				filePath := filepath.Join(suite.WorkspaceDir, "go.mod")
+				result, err := tools.GetCodeLens(ctx, suite.Client, filePath)
+				if err != nil {
+					t.Fatalf("GetCodeLens failed: %v", err)
+				}
 
-		ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
-		defer cancel()
+				// Verify we have at least one code lens
+				if !strings.Contains(result, "Code Lens results") {
+					t.Errorf("Expected code lens results but got: %s", result)
+				}
 
-		// The go.mod fixture already has an unused dependency
-		// Wait for LSP to process the file
-		time.Sleep(2 * time.Second)
+				// Verify we have a "go mod tidy" code lens
+				if !strings.Contains(strings.ToLower(result), "tidy") {
+					t.Errorf("Expected 'tidy' code lens but got: %s", result)
+				}
 
-		// First get the code lenses to find the right index
-		filePath := filepath.Join(suite.WorkspaceDir, "go.mod")
-		result, err := tools.GetCodeLens(ctx, suite.Client, filePath)
-		if err != nil {
-			t.Fatalf("GetCodeLens failed: %v", err)
-		}
+				common.SnapshotTest(t, "go", snapshotCategory, "get", result)
+			})
 
-		// Make sure we have a code lens with "tidy" in it
-		if !strings.Contains(strings.ToLower(result), "tidy") {
-			t.Fatalf("Expected 'tidy' code lens but none found: %s", result)
-		}
+			t.Run("ExecuteCodeLens", func(t *testing.T) {
+				suite := internal.GetTestSuiteForMode(t, mode.headless)
 
-		// Typically, the tidy lens should be index 2 (1-based) for gopls, but let's log for debugging
-		t.Logf("Code lenses: %s", result)
+				ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
+				defer cancel()
 
-		// Execute the code lens (use index 2 which should be the tidy lens)
-		execResult, err := tools.ExecuteCodeLens(ctx, suite.Client, filePath, 2)
-		if err != nil {
-			t.Fatalf("ExecuteCodeLens failed: %v", err)
-		}
+				// The go.mod fixture already has an unused dependency
+				// Wait for LSP to process the file
+				time.Sleep(2 * time.Second)
 
-		t.Logf("ExecuteCodeLens result: %s", execResult)
+				// First get the code lenses to find the right index
+				filePath := filepath.Join(suite.WorkspaceDir, "go.mod")
+				result, err := tools.GetCodeLens(ctx, suite.Client, filePath)
+				if err != nil {
+					t.Fatalf("GetCodeLens failed: %v", err)
+				}
 
-		// Wait for LSP to update the file
-		time.Sleep(3 * time.Second)
+				// Make sure we have a code lens with "tidy" in it
+				if !strings.Contains(strings.ToLower(result), "tidy") {
+					t.Fatalf("Expected 'tidy' code lens but none found: %s", result)
+				}
 
-		// Check if the file was updated (dependency should be removed)
-		updatedContent, err := suite.ReadFile("go.mod")
-		if err != nil {
-			t.Fatalf("Failed to read updated go.mod: %v", err)
-		}
+				// Typically, the tidy lens should be index 2 (1-based) for gopls, but let's log for debugging
+				t.Logf("Code lenses: %s", result)
 
-		// Verify the dependency is gone
-		if strings.Contains(updatedContent, "github.com/stretchr/testify") {
-			t.Errorf("Expected dependency to be removed, but it's still there:\n%s", updatedContent)
-		}
+				// Execute the code lens (use index 2 which should be the tidy lens)
+				execResult, err := tools.ExecuteCodeLens(ctx, suite.Client, filePath, 2)
+				if err != nil {
+					t.Fatalf("ExecuteCodeLens failed: %v", err)
+				}
 
-		common.SnapshotTest(t, "go", "codelens", "execute", execResult)
-	})
+				t.Logf("ExecuteCodeLens result: %s", execResult)
+
+				// Wait for LSP to update the file
+				time.Sleep(3 * time.Second)
+
+				// Check if the file was updated (dependency should be removed)
+				updatedContent, err := suite.ReadFile("go.mod")
+				if err != nil {
+					t.Fatalf("Failed to read updated go.mod: %v", err)
+				}
+
+				// Verify the dependency is gone
+				if strings.Contains(updatedContent, "github.com/stretchr/testify") {
+					t.Errorf("Expected dependency to be removed, but it's still there:\n%s", updatedContent)
+				}
+
+				common.SnapshotTest(t, "go", snapshotCategory, "execute", execResult)
+			})
+		})
+	}
 }

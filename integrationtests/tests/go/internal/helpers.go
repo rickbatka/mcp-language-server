@@ -2,7 +2,6 @@
 package internal
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -32,24 +31,30 @@ func GetTestSuite(t *testing.T) *common.TestSuite {
 	return suite
 }
 
-// GetHeadlessTestSuite returns a test suite that connects to an existing gopls at GOPLS_HEADLESS_ADDR.
-// Skips the test if GOPLS_HEADLESS_ADDR is not set. The server must be started separately (e.g. gopls -listen=:6060).
-func GetHeadlessTestSuite(t *testing.T) *common.TestSuite {
-	addr := os.Getenv("GOPLS_HEADLESS_ADDR")
-	if addr == "" {
-		t.Skip("GOPLS_HEADLESS_ADDR not set; set to e.g. localhost:6060 to run headless tests (gopls must be running with -listen=:6060)")
+// GetTestSuiteForMode returns a test suite for the given mode. When headless is true, starts gopls in listen
+// mode and connects via NewClientHeadless; otherwise starts gopls as a subprocess.
+func GetTestSuiteForMode(t *testing.T, headless bool) *common.TestSuite {
+	if headless {
+		return GetHeadlessTestSuite(t)
 	}
+	return GetTestSuite(t)
+}
 
+// GetHeadlessTestSuite returns a test suite that starts gopls in listen mode (same Command/Args as GetTestSuite)
+// and connects via NewClientHeadless. No external server or GOPLS_HEADLESS_ADDR is required.
+func GetHeadlessTestSuite(t *testing.T) *common.TestSuite {
 	repoRoot, err := filepath.Abs("../../../..")
 	if err != nil {
 		t.Fatalf("Failed to get repo root: %v", err)
 	}
 
 	config := common.LSPTestConfig{
-		Name:             "go",
-		ConnectAddr:      addr,
-		WorkspaceDir:     filepath.Join(repoRoot, "integrationtests/workspaces/go"),
-		InitializeTimeMs: 2000,
+		Name:               "go",
+		Command:            "gopls",
+		Args:               []string{},
+		HeadlessListenArg:  "-listen=127.0.0.1:%d",
+		WorkspaceDir:       filepath.Join(repoRoot, "integrationtests/workspaces/go"),
+		InitializeTimeMs:   2000,
 	}
 
 	suite := common.NewTestSuite(t, config)

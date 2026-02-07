@@ -12,7 +12,8 @@ import (
 	"github.com/isaacphi/mcp-language-server/internal/tools"
 )
 
-// TestHover tests hover functionality with the Go language server
+// TestHover tests hover functionality with the Go language server.
+// Runs in both subprocess and headless (listen-mode) modes.
 func TestHover(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -84,43 +85,49 @@ func TestHover(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Get a test suite
-			suite := internal.GetTestSuite(t)
-
+	for _, mode := range []struct {
+		name     string
+		headless bool
+	}{{"Subprocess", false}, {"Headless", true}} {
+		mode := mode
+		t.Run(mode.name, func(t *testing.T) {
+			suite := internal.GetTestSuiteForMode(t, mode.headless)
 			ctx, cancel := context.WithTimeout(suite.Context, 5*time.Second)
 			defer cancel()
 
-			filePath := filepath.Join(suite.WorkspaceDir, tt.file)
-			err := suite.Client.OpenFile(ctx, filePath)
-			if err != nil {
-				t.Fatalf("Failed to open %s: %v", tt.file, err)
+			snapshotCategory := "hover"
+			if mode.headless {
+				snapshotCategory = "hover_headless"
 			}
 
-			// Get hover info
-			result, err := tools.GetHoverInfo(ctx, suite.Client, filePath, tt.line, tt.column)
-			if err != nil {
-				// For the "OutsideFile" test, we expect an error
-				if tt.name == "OutsideFile" {
-					// Create a snapshot even for error case
-					common.SnapshotTest(t, "go", "hover", tt.snapshotName, err.Error())
-					return
-				}
-				t.Fatalf("GetHoverInfo failed: %v", err)
-			}
+			for _, tt := range tests {
+				tt := tt
+				t.Run(tt.name, func(t *testing.T) {
+					filePath := filepath.Join(suite.WorkspaceDir, tt.file)
+					err := suite.Client.OpenFile(ctx, filePath)
+					if err != nil {
+						t.Fatalf("Failed to open %s: %v", tt.file, err)
+					}
 
-			// Verify expected content
-			if tt.expectedText != "" && !strings.Contains(result, tt.expectedText) {
-				t.Errorf("Expected hover info to contain %q but got: %s", tt.expectedText, result)
-			}
+					result, err := tools.GetHoverInfo(ctx, suite.Client, filePath, tt.line, tt.column)
+					if err != nil {
+						if tt.name == "OutsideFile" {
+							common.SnapshotTest(t, "go", snapshotCategory, tt.snapshotName, err.Error())
+							return
+						}
+						t.Fatalf("GetHoverInfo failed: %v", err)
+					}
 
-			// Verify unexpected content is absent
-			if tt.unexpectedText != "" && strings.Contains(result, tt.unexpectedText) {
-				t.Errorf("Expected hover info NOT to contain %q but it was found: %s", tt.unexpectedText, result)
-			}
+					if tt.expectedText != "" && !strings.Contains(result, tt.expectedText) {
+						t.Errorf("Expected hover info to contain %q but got: %s", tt.expectedText, result)
+					}
+					if tt.unexpectedText != "" && strings.Contains(result, tt.unexpectedText) {
+						t.Errorf("Expected hover info NOT to contain %q but it was found: %s", tt.unexpectedText, result)
+					}
 
-			common.SnapshotTest(t, "go", "hover", tt.snapshotName, result)
+					common.SnapshotTest(t, "go", snapshotCategory, tt.snapshotName, result)
+				})
+			}
 		})
 	}
 }
