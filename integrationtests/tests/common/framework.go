@@ -157,26 +157,16 @@ func (ts *TestSuite) Setup() error {
 	ts.WorkspaceDir = workspaceDir
 	ts.t.Logf("Copied workspace from %s to %s", ts.Config.WorkspaceDir, workspaceDir)
 
-	// Create and initialize LSP client
-	var client *lsp.Client
+	// Create and initialize LSP client (always start subprocess; headless/ConnectAddr is not used)
 	if ts.Config.ConnectAddr != "" {
-		ts.headless = true
-		var err error
-		client, err = lsp.NewClientHeadless(ts.Config.ConnectAddr)
-		if err != nil {
-			return fmt.Errorf("failed to connect to LSP at %s: %w", ts.Config.ConnectAddr, err)
-		}
-		ts.Client = client
-		ts.t.Logf("Connected to LSP at %s (headless)", ts.Config.ConnectAddr)
-	} else {
-		var err error
-		client, err = lsp.NewClient(ts.Config.Command, ts.Config.Args...)
-		if err != nil {
-			return fmt.Errorf("failed to create LSP client: %w", err)
-		}
-		ts.Client = client
-		ts.t.Logf("Started LSP: %s %v", ts.Config.Command, ts.Config.Args)
+		return fmt.Errorf("headless mode is disabled; config must use Command/Args to start the LSP in integration tests.")
 	}
+	client, err := lsp.NewClient(ts.Config.Command, ts.Config.Args...)
+	if err != nil {
+		return fmt.Errorf("failed to create LSP client: %w", err)
+	}
+	ts.Client = client
+	ts.t.Logf("Started LSP: %s %v", ts.Config.Command, ts.Config.Args)
 
 	// Initialize LSP and set up file watcher
 	initResult, err := client.InitializeLSPClient(ts.Context, workspaceDir)
