@@ -1,10 +1,6 @@
 # Summary
 This project (mcp-language-server) is an MCP server that exposes language server protocol to AI agents. It helps MCP enabled clients (agents) navigate codebases more easily by giving them access semantic tools like get definition, references, rename, and diagnostics.
 
-The project is mature and almost feature-complete, but we will be making some modifications to it.
-
-We will use Beads (bd) for issue tracking.
-
 # Build
 go build -o mcp-language-server
 

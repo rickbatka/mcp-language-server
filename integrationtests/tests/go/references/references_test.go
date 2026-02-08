@@ -90,33 +90,30 @@ func TestFindReferences(t *testing.T) {
 		name     string
 		headless bool
 	}{{"Subprocess", false}, {"Headless", true}} {
-		mode := mode
 		t.Run(mode.name, func(t *testing.T) {
-			suite := internal.GetTestSuiteForMode(t, mode.headless)
+			suite := internal.GetTestSuite(t, mode.headless)
 			ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
 			defer cancel()
 
-			snapshotCategory := "references"
-			if mode.headless {
-				snapshotCategory = "references_headless"
-			}
-
 			for _, tc := range tests {
-				tc := tc
 				t.Run(tc.name, func(t *testing.T) {
+					// Call the FindReferences tool
 					result, err := tools.FindReferences(ctx, suite.Client, tc.symbolName)
 					if err != nil {
 						t.Fatalf("Failed to find references: %v", err)
 					}
+					// Check that the result contains relevant information
 					if !strings.Contains(result, tc.expectedText) {
 						t.Errorf("References do not contain expected text: %s", tc.expectedText)
 					}
+					// Count how many different files are mentioned in the result
 					fileCount := countFilesInResult(result)
 					if fileCount < tc.expectedFiles {
 						t.Errorf("Expected references in at least %d files, but found in %d files",
 							tc.expectedFiles, fileCount)
 					}
-					common.SnapshotTest(t, "go", snapshotCategory, tc.snapshotName, result)
+					// Use snapshot testing to verify exact output
+					common.SnapshotTest(t, "go", "references", tc.snapshotName, result)
 				})
 			}
 		})

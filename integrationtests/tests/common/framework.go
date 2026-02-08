@@ -21,13 +21,13 @@ import (
 
 // LSPTestConfig defines configuration for a language server test
 type LSPTestConfig struct {
-	Name               string   // Name of the language server
-	Command            string   // Command to run (ignored if ConnectAddr is set)
-	Args               []string // Arguments (ignored if ConnectAddr is set)
-	ConnectAddr        string   // If set, connect to existing LSP at this address (headless) instead of starting Command
-	HeadlessListenArg  string   // If set, start LSP with this listen arg (e.g. "-listen=127.0.0.1:%d") and connect via NewClientHeadless
-	WorkspaceDir       string   // Template workspace directory
-	InitializeTimeMs   int      // Time to wait after initialization in ms
+	Name              string   // Name of the language server
+	Command           string   // Command to run (ignored if ConnectAddr is set)
+	Args              []string // Arguments (ignored if ConnectAddr is set)
+	ConnectAddr       string   // If set, connect to existing LSP at this address (headless) instead of starting Command
+	HeadlessListenArg string   // If set, start LSP with this listen arg (e.g. "-listen=127.0.0.1:6061") and connect via NewClientHeadless
+	WorkspaceDir      string   // Template workspace directory
+	InitializeTimeMs  int      // Time to wait after initialization in ms
 }
 
 // TestSuite contains everything needed for running integration tests
@@ -44,8 +44,8 @@ type TestSuite struct {
 	logFile      string
 	t            *testing.T
 	LanguageName string
-	headless     bool       // true when using ConnectAddr or HeadlessListenArg (affects cleanup)
-	headlessCmd  *exec.Cmd  // when we start LSP in listen mode, the process we started (for cleanup)
+	headless     bool      // true when using ConnectAddr or HeadlessListenArg (affects cleanup)
+	headlessCmd  *exec.Cmd // when we start LSP in listen mode, the process we started (for cleanup)
 }
 
 // NewTestSuite creates a new test suite for the given language server
@@ -64,7 +64,7 @@ func NewTestSuite(t *testing.T, config LSPTestConfig) *TestSuite {
 // startLSPInListenMode reserves a port, starts the LSP with the same Command/Args plus
 // HeadlessListenArg (with %d replaced by the port), and waits until the server accepts connections.
 // Caller must connect with NewClientHeadless(addr) and is responsible for killing the process on cleanup.
-func (ts *TestSuite) startLSPInListenMode(workspaceDir string) (addr string, cmd *exec.Cmd, err error) {
+func (ts *TestSuite) startLSPInListenMode() (addr string, cmd *exec.Cmd, err error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to reserve port: %w", err)
@@ -205,7 +205,7 @@ func (ts *TestSuite) Setup() error {
 	var client *lsp.Client
 	if ts.Config.HeadlessListenArg != "" {
 		// Start LSP in listen mode (same Command/Args as NewClient), then connect via NewClientHeadless
-		addr, cmd, err := ts.startLSPInListenMode(workspaceDir)
+		addr, cmd, err := ts.startLSPInListenMode()
 		if err != nil {
 			return err
 		}

@@ -3,6 +3,8 @@ package codelens_test
 import (
 	"context"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,14 +23,10 @@ func TestCodeLens(t *testing.T) {
 		name     string
 		headless bool
 	}{{"Subprocess", false}, {"Headless", true}} {
-		mode := mode
-		snapshotCategory := "codelens"
-		if mode.headless {
-			snapshotCategory = "codelens_headless"
-		}
 		t.Run(mode.name, func(t *testing.T) {
+			// Test GetCodeLens with a file that should have codelenses
 			t.Run("GetCodeLens", func(t *testing.T) {
-				suite := internal.GetTestSuiteForMode(t, mode.headless)
+				suite := internal.GetTestSuite(t, mode.headless)
 
 				ctx, cancel := context.WithTimeout(suite.Context, 5*time.Second)
 				defer cancel()
@@ -55,11 +53,12 @@ func TestCodeLens(t *testing.T) {
 					t.Errorf("Expected 'tidy' code lens but got: %s", result)
 				}
 
-				common.SnapshotTest(t, "go", snapshotCategory, "get", result)
+				common.SnapshotTest(t, "go", "codelens", "get", result)
 			})
 
+			// Test ExecuteCodeLens by running the tidy codelens command
 			t.Run("ExecuteCodeLens", func(t *testing.T) {
-				suite := internal.GetTestSuiteForMode(t, mode.headless)
+				suite := internal.GetTestSuite(t, mode.headless)
 
 				ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
 				defer cancel()
@@ -79,12 +78,22 @@ func TestCodeLens(t *testing.T) {
 				if !strings.Contains(strings.ToLower(result), "tidy") {
 					t.Fatalf("Expected 'tidy' code lens but none found: %s", result)
 				}
+				// Use regex to find a number in square brackets followed by 'tidy' with no square brackets in between,
+				// this tells us which codelens index is the `go mod tidy`.
+				re := regexp.MustCompile(`\[(\d+)\][^\[\]]*tidy`)
+				match := re.FindStringSubmatch(result)
+				if len(match) < 2 {
+					t.Fatalf("Could not find code lens index for 'tidy': %s", result)
+				}
+				tidyIndex, err := strconv.Atoi(match[1])
+				if err != nil {
+					t.Fatalf("Failed to parse code lens index for 'tidy': %v", err)
+				}
 
-				// Typically, the tidy lens should be index 2 (1-based) for gopls, but let's log for debugging
 				t.Logf("Code lenses: %s", result)
 
-				// Execute the code lens (use index 2 which should be the tidy lens)
-				execResult, err := tools.ExecuteCodeLens(ctx, suite.Client, filePath, 2)
+				// Execute the code lens using the index we found for the tidy lens
+				execResult, err := tools.ExecuteCodeLens(ctx, suite.Client, filePath, tidyIndex)
 				if err != nil {
 					t.Fatalf("ExecuteCodeLens failed: %v", err)
 				}
@@ -105,7 +114,7 @@ func TestCodeLens(t *testing.T) {
 					t.Errorf("Expected dependency to be removed, but it's still there:\n%s", updatedContent)
 				}
 
-				common.SnapshotTest(t, "go", snapshotCategory, "execute", execResult)
+				common.SnapshotTest(t, "go", "codelens", "execute", execResult)
 			})
 		})
 	}

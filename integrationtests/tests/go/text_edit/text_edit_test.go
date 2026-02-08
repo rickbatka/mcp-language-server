@@ -153,52 +153,53 @@ func AnotherFunction() {
 		name     string
 		headless bool
 	}{{"Subprocess", false}, {"Headless", true}} {
-		mode := mode
-		snapshotCategory := "text_edit"
-		if mode.headless {
-			snapshotCategory = "text_edit_headless"
-		}
+
 		t.Run(mode.name, func(t *testing.T) {
-			suite := internal.GetTestSuiteForMode(t, mode.headless)
+			suite := internal.GetTestSuite(t, mode.headless)
 			ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
 			defer cancel()
 
 			testFileName := "edit_test.go"
 			testFilePath := filepath.Join(suite.WorkspaceDir, testFileName)
 
+			// Reset the file before each test
 			err := suite.WriteFile(testFileName, initialContent)
 			if err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
 
 			for _, tc := range tests {
-				tc := tc
 				t.Run(tc.name, func(t *testing.T) {
 					err := suite.WriteFile(testFileName, initialContent)
 					if err != nil {
 						t.Fatalf("Failed to reset test file: %v", err)
 					}
 
+					// Call the ApplyTextEdits tool with the non-URL file path
 					result, err := tools.ApplyTextEdits(ctx, suite.Client, testFilePath, tc.edits)
 					if err != nil {
 						t.Fatalf("Failed to apply text edits: %v", err)
 					}
 
+					// Verify the result message
 					if !strings.Contains(result, "Successfully applied text edits") {
 						t.Errorf("Result does not contain success message: %s", result)
 					}
 
+					// Read the file content after edits
 					content, err := suite.ReadFile(testFileName)
 					if err != nil {
 						t.Fatalf("Failed to read test file after edits: %v", err)
 					}
 
+					// Run all verification functions
 					for _, verify := range tc.verifications {
 						verify(t, content)
 					}
 
+					// Use snapshot testing to verify the exact result
 					snapshotName := strings.ToLower(strings.ReplaceAll(tc.name, " ", "_"))
-					common.SnapshotTest(t, "go", snapshotCategory, snapshotName, result)
+					common.SnapshotTest(t, "go", "text_edit", snapshotName, result)
 				})
 			}
 		})
@@ -306,52 +307,52 @@ func NewFunction() {
 		name     string
 		headless bool
 	}{{"Subprocess", false}, {"Headless", true}} {
-		mode := mode
-		snapshotCategory := "text_edit"
-		if mode.headless {
-			snapshotCategory = "text_edit_headless"
-		}
 		t.Run(mode.name, func(t *testing.T) {
-			suite := internal.GetTestSuiteForMode(t, mode.headless)
+			suite := internal.GetTestSuite(t, mode.headless)
 			ctx, cancel := context.WithTimeout(suite.Context, 10*time.Second)
 			defer cancel()
 
 			testFileName := "edge_case_test.go"
 			testFilePath := filepath.Join(suite.WorkspaceDir, testFileName)
 
+			// Reset the file before each test
 			err := suite.WriteFile(testFileName, borderCasesContent)
 			if err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
 
 			for _, tc := range tests {
-				tc := tc
 				t.Run(tc.name, func(t *testing.T) {
 					err := suite.WriteFile(testFileName, borderCasesContent)
 					if err != nil {
 						t.Fatalf("Failed to reset test file: %v", err)
 					}
 
+					// Call the ApplyTextEdits tool
 					result, err := tools.ApplyTextEdits(ctx, suite.Client, testFilePath, tc.edits)
 					if err != nil {
 						t.Fatalf("Failed to apply text edits: %v", err)
 					}
 
+					// Verify the result message
 					if !strings.Contains(result, "Successfully applied text edits") {
 						t.Errorf("Result does not contain success message: %s", result)
 					}
 
+					// Read the file content after edits
 					content, err := suite.ReadFile(testFileName)
 					if err != nil {
 						t.Fatalf("Failed to read test file after edits: %v", err)
 					}
 
+					// Run all verification functions
 					for _, verify := range tc.verifications {
 						verify(t, content)
 					}
 
+					// Use snapshot testing to verify the exact result
 					snapshotName := strings.ToLower(strings.ReplaceAll(tc.name, " ", "_"))
-					common.SnapshotTest(t, "go", snapshotCategory, snapshotName, result)
+					common.SnapshotTest(t, "go", "text_edit", snapshotName, result)
 				})
 			}
 		})

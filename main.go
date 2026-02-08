@@ -24,7 +24,7 @@ type config struct {
 	workspaceDir string
 	lspCommand   string
 	lspArgs      []string
-	lspConnect   string // if set, connect to existing LSP at this address (e.g. localhost:6060) instead of starting a process
+	lspConnect   string // if set, connect to existing LSP at this address (e.g. localhost:6061) instead of starting a process
 }
 
 type mcpServer struct {
@@ -41,7 +41,7 @@ func parseConfig() (*config, error) {
 	cfg := &config{}
 	flag.StringVar(&cfg.workspaceDir, "workspace", "", "Path to workspace directory")
 	flag.StringVar(&cfg.lspCommand, "lsp", "", "LSP command to run (args should be passed after --)")
-	flag.StringVar(&cfg.lspConnect, "lsp-connect", "", "Connect to existing LSP at address (e.g. localhost:6060) instead of starting a process (for gopls use -listen=:PORT)")
+	flag.StringVar(&cfg.lspConnect, "lsp-connect", "", "Connect to existing LSP at address (e.g. localhost:6061) instead of starting a process (for gopls use -listen=:PORT)")
 	flag.Parse()
 
 	// Get remaining args after -- as LSP arguments
@@ -225,9 +225,11 @@ func cleanup(s *mcpServer, done chan struct{}) {
 		s.lspClient.CloseAllFiles(ctx)
 
 		if !s.headless {
+			// Create a shorter timeout context for the shutdown request
 			shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			defer shutdownCancel()
 
+			// Run shutdown in a goroutine with timeout to avoid blocking if LSP doesn't respond
 			shutdownDone := make(chan struct{})
 			go func() {
 				coreLogger.Info("Sending shutdown request")
@@ -237,6 +239,7 @@ func cleanup(s *mcpServer, done chan struct{}) {
 				close(shutdownDone)
 			}()
 
+			// Wait for shutdown with timeout
 			select {
 			case <-shutdownDone:
 				coreLogger.Info("Shutdown request completed")

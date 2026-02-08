@@ -102,9 +102,9 @@ func NewClient(command string, args ...string) (*Client, error) {
 	return client, nil
 }
 
-// NewClientHeadless connects to an already-running LSP server at addr (e.g. "localhost:6060").
+// NewClientHeadless connects to an already-running LSP server at addr (e.g. "localhost:6061").
 // The server must speak LSP JSON-RPC over the stream (Content-Length + JSON). No process is
-// started and stderr is not read. For gopls, start the server with -listen=:6060 so it
+// started and stderr is not read. For gopls, start the server with -listen=:6061 so it
 // accepts LSP connections on that port (--debug is for the debug HTTP server, not LSP).
 func NewClientHeadless(addr string) (*Client, error) {
 	conn, err := net.Dial("tcp", addr)
@@ -258,9 +258,11 @@ func (c *Client) InitializeLSPClient(ctx context.Context, workspaceDir string) (
 }
 
 func (c *Client) Close() error {
+	// Try to close all open files first
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Attempt to close files but continue shutdown regardless
 	c.CloseAllFiles(ctx)
 
 	if c.Cmd == nil {
@@ -287,14 +289,17 @@ func (c *Client) Close() error {
 			}
 			close(forcedKill)
 		case <-forcedKill:
+			// Channel closed from completion path
 			return
 		}
 	}()
 
+	// Close stdin to signal the server
 	if err := c.stdin.Close(); err != nil {
 		lspLogger.Error("Failed to close stdin: %v", err)
 	}
 
+	// Wait for process to exit
 	err := c.Cmd.Wait()
 	close(forcedKill)
 

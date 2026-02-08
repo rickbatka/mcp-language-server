@@ -89,19 +89,12 @@ func TestHover(t *testing.T) {
 		name     string
 		headless bool
 	}{{"Subprocess", false}, {"Headless", true}} {
-		mode := mode
 		t.Run(mode.name, func(t *testing.T) {
-			suite := internal.GetTestSuiteForMode(t, mode.headless)
+			suite := internal.GetTestSuite(t, mode.headless)
 			ctx, cancel := context.WithTimeout(suite.Context, 5*time.Second)
 			defer cancel()
 
-			snapshotCategory := "hover"
-			if mode.headless {
-				snapshotCategory = "hover_headless"
-			}
-
 			for _, tt := range tests {
-				tt := tt
 				t.Run(tt.name, func(t *testing.T) {
 					filePath := filepath.Join(suite.WorkspaceDir, tt.file)
 					err := suite.Client.OpenFile(ctx, filePath)
@@ -109,23 +102,28 @@ func TestHover(t *testing.T) {
 						t.Fatalf("Failed to open %s: %v", tt.file, err)
 					}
 
+					// Get hover info
 					result, err := tools.GetHoverInfo(ctx, suite.Client, filePath, tt.line, tt.column)
 					if err != nil {
+						// For the "OutsideFile" test, we expect an error
 						if tt.name == "OutsideFile" {
-							common.SnapshotTest(t, "go", snapshotCategory, tt.snapshotName, err.Error())
+							// Create a snapshot even for error case
+							common.SnapshotTest(t, "go", "hover", tt.snapshotName, err.Error())
 							return
 						}
 						t.Fatalf("GetHoverInfo failed: %v", err)
 					}
 
+					// Verify expected content
 					if tt.expectedText != "" && !strings.Contains(result, tt.expectedText) {
 						t.Errorf("Expected hover info to contain %q but got: %s", tt.expectedText, result)
 					}
+					// Verify unexpected content is absent
 					if tt.unexpectedText != "" && strings.Contains(result, tt.unexpectedText) {
 						t.Errorf("Expected hover info NOT to contain %q but it was found: %s", tt.unexpectedText, result)
 					}
 
-					common.SnapshotTest(t, "go", snapshotCategory, tt.snapshotName, result)
+					common.SnapshotTest(t, "go", "hover", tt.snapshotName, result)
 				})
 			}
 		})
